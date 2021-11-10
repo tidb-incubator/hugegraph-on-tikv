@@ -44,7 +44,7 @@ public abstract class TikvSessions extends BackendSessionPool {
     public abstract Session session();
 
     /**
-     * Session for RocksDB
+     * Session for Tikv
      */
     public static abstract class Session extends AbstractBackendSession {
 

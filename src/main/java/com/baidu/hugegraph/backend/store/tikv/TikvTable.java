@@ -60,11 +60,11 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
 
     private static final Logger LOG = Log.logger(TikvStore.class);
 
-    private final RocksDBShardSpliter shardSpliter;
+    private final TikvShardSpliter shardSpliter;
 
     public TikvTable(String database, String table) {
         super(String.format("%s+%s", database, table));
-        this.shardSpliter = new RocksDBShardSpliter(this.table());
+        this.shardSpliter = new TikvShardSpliter(this.table());
     }
 
     @Override
@@ -274,9 +274,9 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         return BinaryEntryIterator.sizeOfBackendEntry(entry);
     }
 
-    private static class RocksDBShardSpliter extends ShardSpliter<Session> {
+    private static class TikvShardSpliter extends ShardSpliter<Session> {
 
-        public RocksDBShardSpliter(String table) {
+        public TikvShardSpliter(String table) {
             super(table);
         }
 

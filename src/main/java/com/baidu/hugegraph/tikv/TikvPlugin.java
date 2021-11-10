@@ -4,6 +4,8 @@
 
 package com.baidu.hugegraph.tikv;
 
+import com.baidu.hugegraph.backend.serializer.BinarySerializer;
+import com.baidu.hugegraph.backend.store.tikv.TikvOptions;
 import com.baidu.hugegraph.backend.store.tikv.TikvStoreProvider;
 import com.baidu.hugegraph.plugin.HugeGraphPlugin;
 
@@ -18,6 +20,10 @@ public class TikvPlugin implements HugeGraphPlugin {
     public void register() {
         String classPath = TikvStoreProvider.class.getName();
         HugeGraphPlugin.registerBackend(TikvStoreProvider.TYPE, classPath);
+        classPath = TikvOptions.class.getName();
+        HugeGraphPlugin.registerOptions(TikvStoreProvider.TYPE, classPath);
+        classPath = BinarySerializer.class.getName();
+        HugeGraphPlugin.registerSerializer(TikvStoreProvider.TYPE, classPath);
     }
 
     @Override
@@ -31,6 +37,6 @@ public class TikvPlugin implements HugeGraphPlugin {
     }
 
     public static void main(String[] args) {
-        new com.baidu.hugegraph.tikv.TikvPlugin().register();
+        new TikvPlugin().register();
     }
 }

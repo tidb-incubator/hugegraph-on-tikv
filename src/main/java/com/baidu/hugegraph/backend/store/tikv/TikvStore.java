@@ -132,10 +132,7 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
 
         if (this.sessions == null) {
             this.sessions = new TikvStdSessions(config, this.namespace, this.store);
-        }
-
-        assert this.sessions != null;
-        if (!this.sessions.closed()) {
+        } else if (!this.sessions.closed()) {
             LOG.debug("Store {} has been opened before", this.store);
             this.sessions.useSession();
             return;
