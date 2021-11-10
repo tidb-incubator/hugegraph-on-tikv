@@ -73,7 +73,7 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
     private void registerMetaHandlers() {
         this.registerMetaHandler("metrics", (session, meta, args) -> {
             TikvMetrics metrics = new TikvMetrics(this.sessions);
-            return metrics.metrics();
+            return metrics.getMetrics();
         });
     }
 

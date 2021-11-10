@@ -79,12 +79,12 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
 
     @Override
     public void init(Session session) {
-        // pass
+        // TODO: implement it
     }
 
     @Override
     public void clear(Session session) {
-        // pass
+        // TODO: implement it
     }
 
     @Override
@@ -166,7 +166,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         // Query by id
         if (query.conditions().isEmpty()) {
             assert !query.ids().isEmpty();
-            // NOTE: this will lead to lazy create rocksdb iterator
+            // NOTE: this will lead to lazy create iterator
             return new BackendColumnIteratorWrapper(new FlatMapperIterator<>(
                     query.ids().iterator(), id -> this.queryById(session, id)
             ));
@@ -271,15 +271,10 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     }
 
     protected static final long sizeOfBackendEntry(BackendEntry entry) {
-        return BinaryEntryIterator.sizeOfEntry(entry);
+        return BinaryEntryIterator.sizeOfBackendEntry(entry);
     }
 
     private static class RocksDBShardSpliter extends ShardSpliter<Session> {
-
-        private static final String MEM_SIZE = "rocksdb.size-all-mem-tables";
-        private static final String SST_SIZE = "rocksdb.total-sst-files-size";
-
-        private static final String NUM_KEYS = "rocksdb.estimate-num-keys";
 
         public RocksDBShardSpliter(String table) {
             super(table);

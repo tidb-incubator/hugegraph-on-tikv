@@ -211,7 +211,6 @@ public class TikvStdSessions extends TikvSessions {
          */
         @Override
         public Integer commit() {
-
             int count = this.size();
             if (count <= 0) {
                 return 0;
