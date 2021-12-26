@@ -19,10 +19,31 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
+import com.baidu.hugegraph.backend.store.BackendEntry;
+import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
+import com.baidu.hugegraph.backend.store.BackendEntryIterator;
+import com.baidu.hugegraph.config.HugeConfig;
+import com.baidu.hugegraph.util.Bytes;
+import com.baidu.hugegraph.util.E;
+import com.baidu.hugegraph.util.StringEncoding;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.tikv.common.TiConfiguration;
+import org.tikv.common.TiSession;
+import org.tikv.common.key.Key;
+import org.tikv.common.region.TiRegion;
+import org.tikv.common.util.BackOffer;
+import org.tikv.common.util.ConcreteBackOffer;
+import org.tikv.common.util.FastByteComparisons;
+import org.tikv.kvproto.Kvrpcpb;
+import org.tikv.raw.RawKVClient;
+import org.tikv.shade.com.google.protobuf.ByteString;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -32,28 +53,14 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.commons.lang3.tuple.Pair;
-import org.tikv.common.TiConfiguration;
-import org.tikv.common.TiSession;
-import org.tikv.common.key.Key;
-import org.tikv.kvproto.Kvrpcpb;
-import org.tikv.raw.RawKVClient;
-import org.tikv.shade.com.google.protobuf.ByteString;
-
-import com.baidu.hugegraph.backend.store.BackendEntry;
-import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
-import com.baidu.hugegraph.backend.store.BackendEntryIterator;
-import com.baidu.hugegraph.config.HugeConfig;
-import com.baidu.hugegraph.util.Bytes;
-import com.baidu.hugegraph.util.E;
-import com.baidu.hugegraph.util.StringEncoding;
+import java.util.stream.Collectors;
 
 public class TikvStdSessions extends TikvSessions {
 
     private final HugeConfig config;
 
     private volatile RawKVClient tikvClient;
+    private volatile TiSession tiSession;
 
     private final Map<String, Integer> tables;
     private final AtomicInteger refCount;
@@ -76,8 +83,8 @@ public class TikvStdSessions extends TikvSessions {
                 this.config.get(TikvOptions.TIKV_BATCH_SCAN_CONCURRENCY));
         conf.setDeleteRangeConcurrency(
                 this.config.get(TikvOptions.TIKV_DELETE_RANGE_CONCURRENCY));
-        TiSession session = TiSession.create(conf);
-        this.tikvClient = session.createRawClient();
+        this.tiSession = TiSession.create(conf);
+        this.tikvClient = this.tiSession.createRawClient();
 
         this.tables = new ConcurrentHashMap<>();
         this.refCount = new AtomicInteger(1);
@@ -147,6 +154,11 @@ public class TikvStdSessions extends TikvSessions {
     private RawKVClient tikv() {
         this.checkValid();
         return this.tikvClient;
+    }
+
+    private TiSession tiSession() {
+        this.checkValid();
+        return this.tiSession;
     }
 
     public static final byte[] encode(String string) {
@@ -254,9 +266,72 @@ public class TikvStdSessions extends TikvSessions {
         }
 
         @Override
-        public Pair<byte[], byte[]> keyRange(String table) {
-            // TODO: get first key and lastkey of fake tikv table
-            return null;
+        public List<Pair<byte[], byte[]>> keyRanges(String table) {
+            E.checkArgument(StringUtils.isNotBlank(table),
+                            "Table don't allow empty");
+
+            ByteString startKey = this.key(table);
+            ByteString endKey = ByteString.copyFrom(
+                                Key.toRawKey(startKey).nextPrefix().getBytes());
+            List<TiRegion> regions = this.fetchRegionsFromRange(startKey, endKey);
+            if (regions == null) {
+                return Collections.emptyList();
+            }
+
+            byte[] prefix = startKey.toByteArray();
+
+            return regions.stream()
+                          .filter((region) -> {
+                                 return !region.getStartKey().isEmpty();
+                           }).map((region) -> {
+                                 byte[] realEndKey = null;
+                                 if (FastByteComparisons.compareTo(
+                                     endKey.toByteArray(),
+                                     region.getEndKey().toByteArray()) < 0) {
+                                     realEndKey = endKey.toByteArray();
+                                 } else {
+                                     realEndKey = region.getEndKey()
+                                                        .toByteArray();
+                                 }
+
+                                 return Pair.of(this.originKey(prefix,
+                                                     region.getStartKey()
+                                                           .toByteArray()),
+                                                this.originKey(prefix,
+                                                               realEndKey));
+                           }).collect(Collectors.toList());
+        }
+
+        public byte[] originKey(byte[] prefix, byte[] regionKey) {
+            if (regionKey == null || regionKey.length == 0) {
+                return new byte[0];
+            }
+
+            assert prefix.length < regionKey.length;
+            byte[] originKey = new byte[regionKey.length - prefix.length];
+            System.arraycopy(regionKey, prefix.length,
+                             originKey, 0, originKey.length);
+            return originKey;
+        }
+
+        private List<TiRegion> fetchRegionsFromRange(ByteString startKey,
+                                                     ByteString endKey) {
+            ArrayList regions = new ArrayList();
+            BackOffer backOffer = ConcreteBackOffer.newRawKVBackOff();
+
+            while(startKey.isEmpty() ||
+                  Key.toRawKey(startKey).compareTo(Key.toRawKey(endKey)) < 0) {
+                TiRegion currentRegion = tiSession().getRegionManager()
+                                                    .getRegionByKey(startKey,
+                                                                    backOffer);
+                regions.add(currentRegion);
+                startKey = currentRegion.getEndKey();
+                if (currentRegion.getEndKey().isEmpty()) {
+                    break;
+                }
+            }
+
+            return regions;
         }
 
         /**
@@ -302,6 +377,7 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public byte[] get(String table, byte[] key) {
+            assert !this.hasChanges();
             return tikv().get(this.key(table, key)).toByteArray();
         }
 
@@ -347,8 +423,8 @@ public class TikvStdSessions extends TikvSessions {
 
         private ByteString key(String table, byte[] key) {
             byte[] prefix = table.getBytes();
-            byte[] actualKey = new byte[prefix.length + 1 + key.length];
-            System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
+            byte[] actualKey = Arrays.copyOf(prefix,
+                               prefix.length + 1 + key.length);
             actualKey[prefix.length] = (byte) 0xff;
             System.arraycopy(key, 0, actualKey, prefix.length + 1, key.length);
             return ByteString.copyFrom(actualKey);
