@@ -19,6 +19,17 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.tinkerpop.gremlin.util.iterator.IteratorUtils;
+import org.slf4j.Logger;
+
 import com.baidu.hugegraph.backend.id.Id;
 import com.baidu.hugegraph.backend.page.PageState;
 import com.baidu.hugegraph.backend.query.Aggregate;
@@ -46,16 +57,6 @@ import com.baidu.hugegraph.util.Bytes;
 import com.baidu.hugegraph.util.E;
 import com.baidu.hugegraph.util.Log;
 import com.baidu.hugegraph.util.StringEncoding;
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.tinkerpop.gremlin.util.iterator.IteratorUtils;
-import org.slf4j.Logger;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class TikvTable extends BackendTable<Session, BackendEntry> {
 
@@ -169,7 +170,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             assert !query.ids().isEmpty();
             // NOTE: this will lead to lazy create iterator
             return new BackendColumnIteratorWrapper(new FlatMapperIterator<>(
-                    query.ids().iterator(), id -> this.getById(session, id)
+                   query.ids().iterator(), id -> this.queryById(session, id)
             ));
         }
 
@@ -182,10 +183,16 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         if (query.paging()) {
             PageState page = PageState.fromString(query.page());
             byte[] begin = page.position();
-            return session.scan(this.table(), begin, null, Session.SCAN_ANY);
+            return session.scan(this.table(), begin,
+                                null, Session.SCAN_ANY);
         } else {
             return session.scan(this.table());
         }
+    }
+
+    protected BackendColumnIterator queryById(Session session, Id id) {
+        // TODO: change to get() after vertex and schema don't use id prefix
+        return session.scan(this.table(), id.asBytes());
     }
 
     protected BackendColumnIterator getById(Session session, Id id) {
@@ -253,8 +260,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     }
 
     protected static final BackendEntryIterator newEntryIterator(
-            BackendColumnIterator cols,
-            Query query) {
+                           BackendColumnIterator cols, Query query) {
         return new BinaryEntryIterator<>(cols, query, (entry, col) -> {
             if (entry == null || !entry.belongToMe(col)) {
                 HugeType type = query.resultType();
@@ -276,14 +282,14 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             super(table);
         }
 
-        private String startKey(byte[] start) {
+        private static String startKey(byte[] start) {
             return Arrays.equals(start, START_BYTES) ?
-                    START : StringEncoding.encodeBase64(start);
+                   START : StringEncoding.encodeBase64(start);
         }
 
         private static String endKey(byte[] end) {
             return Arrays.equals(end, END_BYTES) ?
-                    END : StringEncoding.encodeBase64(end);
+                   END : StringEncoding.encodeBase64(end);
         }
 
         @Override
@@ -299,8 +305,8 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
 
             return keyRanges.stream()
                             .map((pair) -> {
-                                return new Shard(this.startKey(pair.getLeft()),
-                                                 this.endKey(pair.getRight()),
+                                return new Shard(startKey(pair.getLeft()),
+                                                 endKey(pair.getRight()),
                                                  0);
                             }).collect(Collectors.toList());
         }

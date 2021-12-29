@@ -19,26 +19,6 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
-import com.baidu.hugegraph.backend.store.BackendEntry;
-import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
-import com.baidu.hugegraph.backend.store.BackendEntryIterator;
-import com.baidu.hugegraph.config.HugeConfig;
-import com.baidu.hugegraph.util.Bytes;
-import com.baidu.hugegraph.util.E;
-import com.baidu.hugegraph.util.StringEncoding;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.tikv.common.TiConfiguration;
-import org.tikv.common.TiSession;
-import org.tikv.common.key.Key;
-import org.tikv.common.region.TiRegion;
-import org.tikv.common.util.BackOffer;
-import org.tikv.common.util.ConcreteBackOffer;
-import org.tikv.common.util.FastByteComparisons;
-import org.tikv.kvproto.Kvrpcpb;
-import org.tikv.raw.RawKVClient;
-import org.tikv.shade.com.google.protobuf.ByteString;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -54,6 +34,27 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.tikv.common.TiConfiguration;
+import org.tikv.common.TiSession;
+import org.tikv.common.key.Key;
+import org.tikv.common.region.TiRegion;
+import org.tikv.common.util.BackOffer;
+import org.tikv.common.util.ConcreteBackOffer;
+import org.tikv.common.util.FastByteComparisons;
+import org.tikv.kvproto.Kvrpcpb;
+import org.tikv.raw.RawKVClient;
+import org.tikv.shade.com.google.protobuf.ByteString;
+
+import com.baidu.hugegraph.backend.store.BackendEntry;
+import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
+import com.baidu.hugegraph.backend.store.BackendEntryIterator;
+import com.baidu.hugegraph.config.HugeConfig;
+import com.baidu.hugegraph.util.Bytes;
+import com.baidu.hugegraph.util.E;
+import com.baidu.hugegraph.util.StringEncoding;
 
 public class TikvStdSessions extends TikvSessions {
 
@@ -169,6 +170,19 @@ public class TikvStdSessions extends TikvSessions {
         return StringEncoding.decode(bytes);
     }
 
+    private static byte[] originKey(int tablePrefixLength,
+                                    byte[] regionKey) {
+        if (regionKey == null || regionKey.length == 0) {
+            return new byte[0];
+        }
+
+        assert tablePrefixLength < regionKey.length;
+        byte[] originKey = new byte[regionKey.length - tablePrefixLength];
+        System.arraycopy(regionKey, tablePrefixLength,
+               originKey, 0, originKey.length);
+        return originKey;
+    }
+
     /**
      * StdSession implement for tikv
      */
@@ -273,17 +287,28 @@ public class TikvStdSessions extends TikvSessions {
             ByteString startKey = this.key(table);
             ByteString endKey = ByteString.copyFrom(
                                 Key.toRawKey(startKey).nextPrefix().getBytes());
-            List<TiRegion> regions = this.fetchRegionsFromRange(startKey, endKey);
+            List<TiRegion> regions = this.fetchRegionsFromRange(startKey,
+                                                                endKey);
             if (regions == null) {
                 return Collections.emptyList();
             }
 
-            byte[] prefix = startKey.toByteArray();
+            int tablePrefixLength = startKey.size();
 
             return regions.stream()
                           .filter((region) -> {
                                  return !region.getStartKey().isEmpty();
                            }).map((region) -> {
+                               /*
+                                * Tikv region look like this:
+                                * region1 [startKey1, regionEndKey1)
+                                * region2 [startKey2, regionEndKey2)
+                                *  ...
+                                * regionN [startKeyN, regionEndKeyN]
+                                * if regionEndKeyN < tableEndKey, the table real
+                                * end key is regionEndKeyN, otherwise the real
+                                * end key is table end key
+                                */
                                  byte[] realEndKey = null;
                                  if (FastByteComparisons.compareTo(
                                      endKey.toByteArray(),
@@ -294,24 +319,14 @@ public class TikvStdSessions extends TikvSessions {
                                                         .toByteArray();
                                  }
 
-                                 return Pair.of(this.originKey(prefix,
+                                 return Pair.of(originKey(
+                                                     tablePrefixLength,
                                                      region.getStartKey()
                                                            .toByteArray()),
-                                                this.originKey(prefix,
-                                                               realEndKey));
+                                                originKey(
+                                                     tablePrefixLength,
+                                                     realEndKey));
                            }).collect(Collectors.toList());
-        }
-
-        public byte[] originKey(byte[] prefix, byte[] regionKey) {
-            if (regionKey == null || regionKey.length == 0) {
-                return new byte[0];
-            }
-
-            assert prefix.length < regionKey.length;
-            byte[] originKey = new byte[regionKey.length - prefix.length];
-            System.arraycopy(regionKey, prefix.length,
-                             originKey, 0, originKey.length);
-            return originKey;
         }
 
         private List<TiRegion> fetchRegionsFromRange(ByteString startKey,
@@ -384,7 +399,8 @@ public class TikvStdSessions extends TikvSessions {
         @Override
         public BackendColumnIterator scan(String table) {
             assert !this.hasChanges();
-            Iterator<Kvrpcpb.KvPair> results = tikv().scanPrefix0(this.key(table));
+            Iterator<Kvrpcpb.KvPair> results = tikv().scanPrefix0(
+                                                      this.key(table));
             return new ColumnIterator(table, results);
         }
 
@@ -405,9 +421,13 @@ public class TikvStdSessions extends TikvSessions {
                 results = tikv().scanPrefix0(this.key(table));
             } else {
                 if (keyTo == null) {
-                    results = tikv().scan0(this.key(table, keyFrom), Key.toRawKey(this.key(table)).nextPrefix().toByteString());
+                    results = tikv().scan0(this.key(table, keyFrom),
+                              Key.toRawKey(this.key(table))
+                                               .nextPrefix().toByteString());
                 } else {
-                    results = tikv().scan0(this.key(table, keyFrom), Key.toRawKey(this.key(table, keyTo)).nextPrefix().toByteString());
+                    results = tikv().scan0(this.key(table, keyFrom),
+                              Key.toRawKey(this.key(table, keyTo))
+                                               .nextPrefix().toByteString());
                 }
             }
             return new ColumnIterator(table, results, keyFrom, keyTo, scanType);
