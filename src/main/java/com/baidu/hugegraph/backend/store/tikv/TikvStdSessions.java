@@ -310,22 +310,20 @@ public class TikvStdSessions extends TikvSessions {
                                 * end key is table end key
                                 */
                                  byte[] realEndKey = null;
-                                 if (FastByteComparisons.compareTo(
-                                     region.getEndKey().toByteArray(),
-                                     endKey.toByteArray()) > 0) {
-                                     realEndKey = region.getEndKey()
-                                                        .toByteArray();
+                                 Key regionEndRowKey = Key.toRawKey(
+                                                           region.getEndKey());
+                                 Key endRowKey = Key.toRawKey(endKey);
+                                 if (endRowKey.compareTo(regionEndRowKey) > 0) {
+                                     realEndKey = regionEndRowKey.getBytes();
                                  } else {
-                                     realEndKey = endKey.toByteArray();
+                                     realEndKey = endRowKey.getBytes();
                                  }
 
-                                 return Pair.of(originKey(
-                                                     tablePrefixLength,
-                                                     region.getStartKey()
-                                                           .toByteArray()),
-                                                originKey(
-                                                     tablePrefixLength,
-                                                     realEndKey));
+                                 return Pair.of(originKey(tablePrefixLength,
+                                                          region.getStartKey()
+                                                                .toByteArray()),
+                                                originKey(tablePrefixLength,
+                                                          realEndKey));
                            }).collect(Collectors.toList());
         }
 
