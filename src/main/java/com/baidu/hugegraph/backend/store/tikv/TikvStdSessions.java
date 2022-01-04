@@ -304,19 +304,19 @@ public class TikvStdSessions extends TikvSessions {
                                 * region1 [startKey1, regionEndKey1)
                                 * region2 [startKey2, regionEndKey2)
                                 *  ...
-                                * regionN [startKeyN, regionEndKeyN]
+                                * regionN [startKeyN, regionEndKeyN)
                                 * if regionEndKeyN < tableEndKey, the table real
                                 * end key is regionEndKeyN, otherwise the real
                                 * end key is table end key
                                 */
                                  byte[] realEndKey = null;
                                  if (FastByteComparisons.compareTo(
-                                     endKey.toByteArray(),
-                                     region.getEndKey().toByteArray()) < 0) {
-                                     realEndKey = endKey.toByteArray();
-                                 } else {
+                                     region.getEndKey().toByteArray(),
+                                     endKey.toByteArray()) > 0) {
                                      realEndKey = region.getEndKey()
                                                         .toByteArray();
+                                 } else {
+                                     realEndKey = endKey.toByteArray();
                                  }
 
                                  return Pair.of(originKey(
