@@ -19,11 +19,13 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tinkerpop.gremlin.util.iterator.IteratorUtils;
 import org.slf4j.Logger;
@@ -79,12 +81,12 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
 
     @Override
     public void init(Session session) {
-        // TODO: implement it
+        // pass
     }
 
     @Override
     public void clear(Session session) {
-        // TODO: implement it
+        session.deletePrefix(this.table(), new byte[0]);
     }
 
     @Override
@@ -168,7 +170,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             assert !query.ids().isEmpty();
             // NOTE: this will lead to lazy create iterator
             return new BackendColumnIteratorWrapper(new FlatMapperIterator<>(
-                    query.ids().iterator(), id -> this.queryById(session, id)
+                   query.ids().iterator(), id -> this.queryById(session, id)
             ));
         }
 
@@ -181,7 +183,8 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         if (query.paging()) {
             PageState page = PageState.fromString(query.page());
             byte[] begin = page.position();
-            return session.scan(this.table(), begin, null, Session.SCAN_ANY);
+            return session.scan(this.table(), begin,
+                                null, Session.SCAN_ANY);
         } else {
             return session.scan(this.table());
         }
@@ -257,8 +260,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     }
 
     protected static final BackendEntryIterator newEntryIterator(
-            BackendColumnIterator cols,
-            Query query) {
+                           BackendColumnIterator cols, Query query) {
         return new BinaryEntryIterator<>(cols, query, (entry, col) -> {
             if (entry == null || !entry.belongToMe(col)) {
                 HugeType type = query.resultType();
@@ -280,32 +282,33 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             super(table);
         }
 
+        private static String startKey(byte[] start) {
+            return Arrays.equals(start, START_BYTES) ?
+                   START : StringEncoding.encodeBase64(start);
+        }
+
+        private static String endKey(byte[] end) {
+            return Arrays.equals(end, END_BYTES) ?
+                   END : StringEncoding.encodeBase64(end);
+        }
+
         @Override
         public List<Shard> getSplits(Session session, long splitSize) {
             E.checkArgument(splitSize >= MIN_SHARD_SIZE,
                             "The split-size must be >= %s bytes, but got %s",
                             MIN_SHARD_SIZE, splitSize);
 
-            Pair<byte[], byte[]> keyRange = session.keyRange(this.table());
-            if (keyRange == null || keyRange.getRight() == null) {
+            List<Pair<byte[], byte[]>> keyRanges = session.keyRanges(this.table());
+            if (CollectionUtils.isEmpty(keyRanges)) {
                 return super.getSplits(session, splitSize);
             }
 
-            long size = this.estimateDataSize(session);
-            if (size <= 0) {
-                size = this.estimateNumKeys(session) * ESTIMATE_BYTES_PER_KV;
-            }
-
-            double count = Math.ceil(size / (double) splitSize);
-            if (count <= 0) {
-                count = 1;
-            }
-
-            Range range = new Range(keyRange.getLeft(),
-                                    Range.increase(keyRange.getRight()));
-            List<Shard> splits = new ArrayList<>((int) count);
-            splits.addAll(range.splitEven((int) count));
-            return splits;
+            return keyRanges.stream()
+                            .map((pair) -> {
+                                return new Shard(startKey(pair.getLeft()),
+                                                 endKey(pair.getRight()),
+                                                 0);
+                            }).collect(Collectors.toList());
         }
 
         @Override

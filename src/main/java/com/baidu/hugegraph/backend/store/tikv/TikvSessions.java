@@ -19,6 +19,7 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
+import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -56,7 +57,7 @@ public abstract class TikvSessions extends BackendSessionPool {
         public static final int SCAN_LT_END = 0x10;
         public static final int SCAN_LTE_END = 0x30;
 
-        public abstract Pair<byte[], byte[]> keyRange(String table);
+        public abstract List<Pair<byte[], byte[]>> keyRanges(String table);
 
         public abstract void put(String table, byte[] key, byte[] value);
 
