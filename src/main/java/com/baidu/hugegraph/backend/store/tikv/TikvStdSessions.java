@@ -179,7 +179,7 @@ public class TikvStdSessions extends TikvSessions {
         assert tablePrefixLength < regionKey.length;
         byte[] originKey = new byte[regionKey.length - tablePrefixLength];
         System.arraycopy(regionKey, tablePrefixLength,
-               originKey, 0, originKey.length);
+                         originKey, 0, originKey.length);
         return originKey;
     }
 
