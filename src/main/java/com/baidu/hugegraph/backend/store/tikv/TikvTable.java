@@ -92,6 +92,13 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     @Override
     public void insert(Session session, BackendEntry entry) {
         assert !entry.columns().isEmpty();
+        if (entry.ttl() > 0) {
+            for (BackendColumn col : entry.columns()) {
+                assert entry.belongToMe(col) : entry;
+                session.put(this.table(), col.name, col.value,
+                            entry.ttl() / 1000); //tikv ttl unit is seconds
+            }
+        }
         for (BackendColumn col : entry.columns()) {
             assert entry.belongToMe(col) : entry;
             session.put(this.table(), col.name, col.value);
@@ -228,7 +235,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
 
     protected BackendColumnIterator queryByCond(Session session,
                                                 ConditionQuery query) {
-        if (query.containsScanCondition()) {
+        if (query.containsScanRelation()) {
             E.checkArgument(query.relations().size() == 1,
                             "Invalid scan with multi conditions: %s", query);
             Relation scan = query.relations().iterator().next();
@@ -270,10 +277,6 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             entry.columns(col);
             return entry;
         });
-    }
-
-    protected static final long sizeOfBackendEntry(BackendEntry entry) {
-        return BinaryEntryIterator.sizeOfBackendEntry(entry);
     }
 
     private static class TikvShardSpliter extends ShardSpliter<Session> {

@@ -35,6 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.ImmutableList;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.tikv.common.TiConfiguration;
@@ -43,7 +45,6 @@ import org.tikv.common.key.Key;
 import org.tikv.common.region.TiRegion;
 import org.tikv.common.util.BackOffer;
 import org.tikv.common.util.ConcreteBackOffer;
-import org.tikv.common.util.FastByteComparisons;
 import org.tikv.kvproto.Kvrpcpb;
 import org.tikv.raw.RawKVClient;
 import org.tikv.shade.com.google.protobuf.ByteString;
@@ -189,12 +190,14 @@ public class TikvStdSessions extends TikvSessions {
     private final class StdSession extends Session {
 
         private Map<ByteString, ByteString> putBatch;
+        private Map<Long, Map<ByteString, ByteString>> putBatchTTL;
         private List<ByteString> deleteBatch;
         private Set<ByteString> deletePrefixBatch;
         private Map<ByteString, ByteString> deleteRangeBatch;
 
         public StdSession(HugeConfig conf) {
             this.putBatch = new HashMap<>();
+            this.putBatchTTL = new HashMap<>();
             this.deleteBatch = new ArrayList<>();
             this.deletePrefixBatch = new HashSet<>();
             this.deleteRangeBatch = new HashMap<>();
@@ -247,6 +250,14 @@ public class TikvStdSessions extends TikvSessions {
                 this.putBatch.clear();
             }
 
+            if (this.putBatchTTL.size() > 0) {
+                for (Map.Entry<Long, Map<ByteString, ByteString>> entry :
+                        this.putBatchTTL.entrySet()) {
+                    tikv().batchPutAtomic(entry.getValue(), entry.getKey());
+                }
+                this.putBatchTTL.clear();
+            }
+
             if (this.deleteBatch.size() > 0) {
                 tikv().batchDeleteAtomic(this.deleteBatch);
                 this.deleteBatch.clear();
@@ -274,6 +285,7 @@ public class TikvStdSessions extends TikvSessions {
         @Override
         public void rollback() {
             this.putBatch.clear();
+            this.putBatchTTL.clear();
             this.deleteBatch.clear();
             this.deletePrefixBatch.clear();
             this.deleteRangeBatch.clear();
@@ -295,36 +307,44 @@ public class TikvStdSessions extends TikvSessions {
 
             int tablePrefixLength = startKey.size();
 
-            return regions.stream()
-                          .filter((region) -> {
-                                 return !region.getStartKey().isEmpty();
-                           }).map((region) -> {
-                               /*
-                                * Tikv region look like this:
-                                * region1 [startKey1, regionEndKey1)
-                                * region2 [startKey2, regionEndKey2)
-                                *  ...
-                                * regionN [startKeyN, regionEndKeyN)
-                                * if regionEndKeyN < tableEndKey, the table real
-                                * end key is regionEndKeyN, otherwise the real
-                                * end key is table end key
-                                */
-                                 byte[] realEndKey = null;
-                                 Key regionEndRowKey = Key.toRawKey(
-                                                           region.getEndKey());
-                                 Key endRowKey = Key.toRawKey(endKey);
-                                 if (endRowKey.compareTo(regionEndRowKey) > 0) {
-                                     realEndKey = regionEndRowKey.getBytes();
-                                 } else {
-                                     realEndKey = endRowKey.getBytes();
-                                 }
+            List<Pair<byte[], byte[]>> result = regions.stream()
+                      .filter((region) -> {
+                             return !region.getStartKey().isEmpty();
+                       }).map((region) -> {
+                           /*
+                            * Tikv region look like this:
+                            * region1 [startKey1, regionEndKey1)
+                            * region2 [startKey2, regionEndKey2)
+                            *  ...
+                            * regionN [startKeyN, regionEndKeyN)
+                            * if regionEndKeyN < tableEndKey, the table real
+                            * end key is regionEndKeyN, otherwise the real
+                            * end key is table end key
+                            */
+                             byte[] realEndKey = null;
+                             Key regionEndRowKey = Key.toRawKey(
+                                                       region.getEndKey());
+                             Key endRowKey = Key.toRawKey(endKey);
+                             if (endRowKey.compareTo(regionEndRowKey) > 0) {
+                                 realEndKey = regionEndRowKey.getBytes();
+                             } else {
+                                 realEndKey = endRowKey.getBytes();
+                             }
 
-                                 return Pair.of(originKey(tablePrefixLength,
-                                                          region.getStartKey()
-                                                                .toByteArray()),
-                                                originKey(tablePrefixLength,
-                                                          realEndKey));
-                           }).collect(Collectors.toList());
+                             return Pair.of(originKey(tablePrefixLength,
+                                                      region.getStartKey()
+                                                            .toByteArray()),
+                                            originKey(tablePrefixLength,
+                                                      realEndKey));
+                       }).collect(Collectors.toList());
+
+            if (CollectionUtils.isNotEmpty(result)) {
+                return result;
+            }
+
+            return ImmutableList.of(Pair.of(new byte[0],
+                                            originKey(tablePrefixLength,
+                                                      endKey.toByteArray())));
         }
 
         private List<TiRegion> fetchRegionsFromRange(ByteString startKey,
@@ -353,6 +373,15 @@ public class TikvStdSessions extends TikvSessions {
         @Override
         public void put(String table, byte[] key, byte[] value) {
             this.putBatch.put(this.key(table, key), ByteString.copyFrom(value));
+        }
+
+        @Override
+        public void put(String table, byte[] key, byte[] value, long ttl) {
+            Map<ByteString, ByteString> batch =
+                            this.putBatchTTL.getOrDefault(ttl,
+                                 new HashMap<ByteString, ByteString>());
+            batch.put(this.key(table, key), ByteString.copyFrom(value));
+            this.putBatchTTL.putIfAbsent(ttl, batch);
         }
 
         @Override
@@ -554,6 +583,8 @@ public class TikvStdSessions extends TikvSessions {
         public boolean hasNext() {
             // Update position for paging
             if (!this.iter.hasNext()) {
+                this.position = null;
+                this.close();
                 return false;
             }
             Kvrpcpb.KvPair next = this.iter.next();
