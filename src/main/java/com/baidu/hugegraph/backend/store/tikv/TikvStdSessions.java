@@ -253,7 +253,7 @@ public class TikvStdSessions extends TikvSessions {
             if (this.putBatchTTL.size() > 0) {
                 for (Map.Entry<Long, Map<ByteString, ByteString>> entry :
                         this.putBatchTTL.entrySet()) {
-                    tikv().batchPutAtomic(entry.getValue(), entry.getKey());
+                     tikv().batchPutAtomic(entry.getValue(), entry.getKey());
                 }
                 this.putBatchTTL.clear();
             }

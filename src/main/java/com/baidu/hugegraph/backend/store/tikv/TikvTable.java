@@ -95,7 +95,6 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         if (entry.ttl() > 0L) {
             for (BackendColumn col : entry.columns()) {
                 assert entry.belongToMe(col) : entry;
-                // Tikv ttl unit is seconds
                 long ttl = entry.ttl() / 1000;
                 session.put(this.table(), col.name, col.value, ttl);
             }
