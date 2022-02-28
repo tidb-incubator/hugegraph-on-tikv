@@ -106,11 +106,6 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
                 session.put(this.table(), col.name, col.value);
             }
         }
-
-        for (BackendColumn col : entry.columns()) {
-            assert entry.belongToMe(col) : entry;
-            session.put(this.table(), col.name, col.value);
-        }
     }
 
     @Override
