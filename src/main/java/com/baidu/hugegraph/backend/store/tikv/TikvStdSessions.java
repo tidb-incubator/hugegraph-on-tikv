@@ -378,7 +378,7 @@ public class TikvStdSessions extends TikvSessions {
         @Override
         public void put(String table, byte[] key, byte[] value, long ttl) {
             Map<ByteString, ByteString> batch =
-                this.putBatchTTL.computeIfAbsent(ttl, __ -> {
+                this.putBatchTTL.computeIfAbsent(ttl, ttlkey -> {
                     return new HashMap<>();
                 });
 

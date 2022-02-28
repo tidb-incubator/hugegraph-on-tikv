@@ -92,10 +92,11 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     @Override
     public void insert(Session session, BackendEntry entry) {
         assert !entry.columns().isEmpty();
-        if (entry.ttl() > 0L) {
+        // The HugeGraph ttl unit is millisecond, but the Tikv is second unit.
+        long ttl = entry.ttl() / 1000L;
+        if (ttl > 0L) {
             for (BackendColumn col : entry.columns()) {
                 assert entry.belongToMe(col) : entry;
-                long ttl = entry.ttl() / 1000;
                 session.put(this.table(), col.name, col.value, ttl);
             }
         } else {
