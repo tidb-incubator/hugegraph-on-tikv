@@ -24,21 +24,6 @@ import com.baidu.hugegraph.backend.store.BackendFeatures;
 public class TikvFeatures implements BackendFeatures {
 
     @Override
-    public boolean supportsPersistence() {
-        return BackendFeatures.super.supportsPersistence();
-    }
-
-    @Override
-    public boolean supportsSharedStorage() {
-        return BackendFeatures.super.supportsSharedStorage();
-    }
-
-    @Override
-    public boolean supportsSnapshot() {
-        return BackendFeatures.super.supportsSnapshot();
-    }
-
-    @Override
     public boolean supportsScanToken() {
         return false;
     }

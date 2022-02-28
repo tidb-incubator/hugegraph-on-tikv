@@ -377,11 +377,13 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public void put(String table, byte[] key, byte[] value, long ttl) {
-            Map<ByteString, ByteString> batch =
-                            this.putBatchTTL.getOrDefault(ttl,
-                                 new HashMap<ByteString, ByteString>());
+            Map<ByteString, ByteString> batch = this.putBatchTTL.get(ttl);
+            if (batch == null) {
+                batch = new HashMap<>();
+                this.putBatchTTL.putIfAbsent(ttl, batch);
+            }
+
             batch.put(this.key(table, key), ByteString.copyFrom(value));
-            this.putBatchTTL.putIfAbsent(ttl, batch);
         }
 
         @Override

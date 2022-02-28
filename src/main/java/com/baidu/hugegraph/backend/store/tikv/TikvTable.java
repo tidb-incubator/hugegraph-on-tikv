@@ -92,13 +92,21 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
     @Override
     public void insert(Session session, BackendEntry entry) {
         assert !entry.columns().isEmpty();
-        if (entry.ttl() > 0) {
+        if (entry.ttl() > 0L) {
             for (BackendColumn col : entry.columns()) {
                 assert entry.belongToMe(col) : entry;
+                // Tikv ttl unit is seconds
                 session.put(this.table(), col.name, col.value,
-                            entry.ttl() / 1000); //tikv ttl unit is seconds
+                            entry.ttl() / 1000);
+            }
+        } else {
+            for (BackendColumn col : entry.columns()) {
+                assert entry.belongToMe(col) : entry;
+                // Tikv ttl unit is seconds
+                session.put(this.table(), col.name, col.value);
             }
         }
+
         for (BackendColumn col : entry.columns()) {
             assert entry.belongToMe(col) : entry;
             session.put(this.table(), col.name, col.value);
