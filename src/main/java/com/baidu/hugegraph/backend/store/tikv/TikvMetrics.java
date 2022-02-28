@@ -31,7 +31,7 @@ public class TikvMetrics implements BackendMetrics {
     }
 
     @Override
-    public Map<String, Object> getMetrics() {
+    public Map<String, Object> metrics() {
         return null;
     }
 }

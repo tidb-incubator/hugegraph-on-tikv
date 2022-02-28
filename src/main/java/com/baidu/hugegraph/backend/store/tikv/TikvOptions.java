@@ -45,7 +45,7 @@ public class TikvOptions extends OptionHolder {
                     "tikv.pds",
                     "The addresses of Tikv pds, separated with commas.",
                     disallowEmpty(),
-                    "localhost"
+                    "localhost:2379"
             );
 
     public static final ConfigOption<Integer> TIKV_BATCH_GET_CONCURRENCY =

@@ -49,6 +49,11 @@ public class TikvFeatures implements BackendFeatures {
     }
 
     @Override
+    public boolean supportsQueryWithInCondition() {
+        return false;
+    }
+
+    @Override
     public boolean supportsQueryWithRangeCondition() {
         return true;
     }
@@ -118,5 +123,10 @@ public class TikvFeatures implements BackendFeatures {
     @Override
     public boolean supportsTtl() {
         return true;
+    }
+
+    @Override
+    public boolean supportsOlapProperties() {
+        return false;
     }
 }

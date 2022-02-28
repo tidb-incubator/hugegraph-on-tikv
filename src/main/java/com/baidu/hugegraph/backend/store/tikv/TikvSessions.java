@@ -60,6 +60,7 @@ public abstract class TikvSessions extends BackendSessionPool {
         public abstract List<Pair<byte[], byte[]>> keyRanges(String table);
 
         public abstract void put(String table, byte[] key, byte[] value);
+        public abstract void put(String table, byte[] key, byte[] value, long ttl);
 
         public abstract void increase(String table, byte[] key, byte[] value);
 
