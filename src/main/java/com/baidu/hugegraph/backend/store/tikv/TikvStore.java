@@ -19,6 +19,8 @@
 
 package com.baidu.hugegraph.backend.store.tikv;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -166,7 +168,6 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
 
     @Override
     public boolean opened() {
-        this.checkConnectionOpened();
         return this.sessions.session().opened();
     }
 
@@ -232,6 +233,7 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
 
     @Override
     public void clear(boolean clearSpace) {
+        this.truncate();
         LOG.debug("Store cleared: {}", this.store);
     }
 
@@ -242,7 +244,21 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
 
     @Override
     public void truncate() {
+        Session session = this.sessions.session();
+        for (TikvTable table : this.tables()) {
+            table.clear(session);
+        }
+        try {
+            session.commit();
+        } catch (Throwable e) {
+            session.rollback();
+            LOG.error("Failed to truncate store: '{}'", e.getMessage());
+        }
         LOG.debug("Store truncated: {}", this.store);
+    }
+
+    protected Collection<TikvTable> tables() {
+        return this.tables.values();
     }
 
     @Override
@@ -264,9 +280,6 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
         Session session = this.sessions.session();
 
         session.rollback();
-    }
-
-    private final void checkConnectionOpened() {
     }
 
     /***************************** Store defines *****************************/
@@ -291,7 +304,7 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
                                  new TikvTables.IndexLabel(namespace));
 
             registerTableManager(HugeType.SECONDARY_INDEX,
-                                 new TikvTables.SecondaryIndex(store));
+                                 new TikvTables.SecondaryIndex(namespace));
         }
 
         @Override
@@ -318,6 +331,13 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
         public boolean isSchemaStore() {
             return true;
         }
+
+        @Override
+        protected Collection<TikvTable> tables() {
+            List<TikvTable> tables = new ArrayList<>(super.tables());
+            tables.add(this.counters);
+            return tables;
+        }
     }
 
     public static class TikvGraphStore extends TikvStore {
@@ -327,33 +347,33 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
             super(provider, namespace, store);
 
             registerTableManager(HugeType.VERTEX,
-                                 new TikvTables.Vertex(store));
+                                 new TikvTables.Vertex(namespace));
 
             registerTableManager(HugeType.EDGE_OUT,
-                                 TikvTables.Edge.out(store));
+                                 TikvTables.Edge.out(namespace));
             registerTableManager(HugeType.EDGE_IN,
-                                 TikvTables.Edge.in(store));
+                                 TikvTables.Edge.in(namespace));
 
             registerTableManager(HugeType.SECONDARY_INDEX,
-                                 new TikvTables.SecondaryIndex(store));
+                                 new TikvTables.SecondaryIndex(namespace));
             registerTableManager(HugeType.VERTEX_LABEL_INDEX,
-                                 new TikvTables.VertexLabelIndex(store));
+                                 new TikvTables.VertexLabelIndex(namespace));
             registerTableManager(HugeType.EDGE_LABEL_INDEX,
-                                 new TikvTables.EdgeLabelIndex(store));
+                                 new TikvTables.EdgeLabelIndex(namespace));
             registerTableManager(HugeType.RANGE_INT_INDEX,
-                                 new TikvTables.RangeIntIndex(store));
+                                 new TikvTables.RangeIntIndex(namespace));
             registerTableManager(HugeType.RANGE_FLOAT_INDEX,
-                                 new TikvTables.RangeFloatIndex(store));
+                                 new TikvTables.RangeFloatIndex(namespace));
             registerTableManager(HugeType.RANGE_LONG_INDEX,
-                                 new TikvTables.RangeLongIndex(store));
+                                 new TikvTables.RangeLongIndex(namespace));
             registerTableManager(HugeType.RANGE_DOUBLE_INDEX,
-                                 new TikvTables.RangeDoubleIndex(store));
+                                 new TikvTables.RangeDoubleIndex(namespace));
             registerTableManager(HugeType.SEARCH_INDEX,
-                                 new TikvTables.SearchIndex(store));
+                                 new TikvTables.SearchIndex(namespace));
             registerTableManager(HugeType.SHARD_INDEX,
-                                 new TikvTables.ShardIndex(store));
+                                 new TikvTables.ShardIndex(namespace));
             registerTableManager(HugeType.UNIQUE_INDEX,
-                                 new TikvTables.UniqueIndex(store));
+                                 new TikvTables.UniqueIndex(namespace));
         }
 
         @Override
