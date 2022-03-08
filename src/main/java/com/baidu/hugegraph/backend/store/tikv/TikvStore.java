@@ -252,7 +252,7 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
             session.commit();
         } catch (Throwable e) {
             session.rollback();
-            LOG.error("Store truncated failed '{}'", e.getMessage());
+            LOG.error("Failed to truncate store: '{}'", e.getMessage());
         }
         LOG.debug("Store truncated: {}", this.store);
     }
