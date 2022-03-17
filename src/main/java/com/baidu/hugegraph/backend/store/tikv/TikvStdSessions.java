@@ -308,9 +308,7 @@ public class TikvStdSessions extends TikvSessions {
             int tablePrefixLength = startKey.size();
 
             List<Pair<byte[], byte[]>> result = regions.stream()
-                      .filter((region) -> {
-                             return !region.getStartKey().isEmpty();
-                       }).map((region) -> {
+                        .map((region) -> {
                            /*
                             * Tikv region look like this:
                             * region1 [startKey1, regionEndKey1)
@@ -321,21 +319,35 @@ public class TikvStdSessions extends TikvSessions {
                             * end key is regionEndKeyN, otherwise the real
                             * end key is table end key
                             */
-                             byte[] realEndKey = null;
-                             Key regionEndRowKey = Key.toRawKey(
-                                                       region.getEndKey());
-                             Key endRowKey = Key.toRawKey(endKey);
-                             if (endRowKey.compareTo(regionEndRowKey) > 0) {
-                                 realEndKey = regionEndRowKey.getBytes();
-                             } else {
-                                 realEndKey = endRowKey.getBytes();
-                             }
+                            Key realStartKey = Key.toRawKey(startKey);
+                            Key realEndKey = Key.toRawKey(endKey);
 
-                             return Pair.of(originKey(tablePrefixLength,
-                                                      region.getStartKey()
-                                                            .toByteArray()),
-                                            originKey(tablePrefixLength,
-                                                      realEndKey));
+                            ByteString regionStartKey = region.getStartKey();
+                            if (regionStartKey != null &&
+                                !regionStartKey.isEmpty()) {
+                                Key regionStartRowKey = Key.toRawKey(
+                                                            regionStartKey);
+                                if (realStartKey.compareTo(
+                                                 regionStartRowKey) <= 0) {
+                                    realStartKey = regionStartRowKey;
+                                }
+                            }
+
+                            ByteString regionEndKey = region.getEndKey();
+                            if (regionEndKey != null &&
+                                !regionEndKey.isEmpty()) {
+                                Key regionEndRowKey = Key.toRawKey(
+                                                          regionEndKey);
+                                if (realEndKey.compareTo(
+                                               regionEndRowKey) >= 0) {
+                                    realEndKey = regionEndRowKey;
+                                }
+                            }
+
+                            return Pair.of(originKey(tablePrefixLength,
+                                                     realStartKey.getBytes()),
+                                           originKey(tablePrefixLength,
+                                                     realEndKey.getBytes()));
                        }).collect(Collectors.toList());
 
             if (CollectionUtils.isNotEmpty(result)) {
