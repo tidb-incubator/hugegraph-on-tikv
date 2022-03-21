@@ -8,6 +8,9 @@ import com.baidu.hugegraph.backend.serializer.BinarySerializer;
 import com.baidu.hugegraph.backend.store.tikv.TikvOptions;
 import com.baidu.hugegraph.backend.store.tikv.TikvStoreProvider;
 import com.baidu.hugegraph.plugin.HugeGraphPlugin;
+import com.baidu.hugegraph.security.HugeSecurityManager;
+
+import org.tikv.raw.RawKVClient;
 
 public class TikvPlugin implements HugeGraphPlugin {
 
@@ -24,6 +27,7 @@ public class TikvPlugin implements HugeGraphPlugin {
         HugeGraphPlugin.registerOptions(TikvStoreProvider.TYPE, classPath);
         classPath = BinarySerializer.class.getName();
         HugeGraphPlugin.registerSerializer(TikvStoreProvider.TYPE, classPath);
+        HugeSecurityManager.ignoreCheckedClass(RawKVClient.class.getName());
     }
 
     @Override
