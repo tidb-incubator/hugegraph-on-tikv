@@ -321,24 +321,24 @@ public class TikvStdSessions extends TikvSessions {
 
                 ByteString regionStartKey = region.getStartKey();
                 if (regionStartKey != null && !regionStartKey.isEmpty()) {
-                    Key regionStartRowKey = Key.toRawKey(regionStartKey);
-                    if (realStartKey.compareTo(regionStartRowKey) <= 0) {
-                        realStartKey = regionStartRowKey;
+                    Key regionStartRawKey = Key.toRawKey(regionStartKey);
+                    if (realStartKey.compareTo(regionStartRawKey) <= 0) {
+                        realStartKey = regionStartRawKey;
                     }
                 }
 
                 ByteString regionEndKey = region.getEndKey();
                 if (regionEndKey != null && !regionEndKey.isEmpty()) {
-                    Key regionEndRowKey = Key.toRawKey(regionEndKey);
-                    if (realEndKey.compareTo(regionEndRowKey) >= 0) {
-                        realEndKey = regionEndRowKey;
+                    Key regionEndRawKey = Key.toRawKey(regionEndKey);
+                    if (realEndKey.compareTo(regionEndRawKey) >= 0) {
+                        realEndKey = regionEndRawKey;
                     }
                 }
 
                 pairs.add(Pair.of(originKey(tablePrefixLength,
-                                  realStartKey.getBytes()),
+                                            realStartKey.getBytes()),
                                   originKey(tablePrefixLength,
-                                  realEndKey.getBytes())));
+                                            realEndKey.getBytes())));
             }
 
             if (CollectionUtils.isNotEmpty(pairs)) {
@@ -347,7 +347,7 @@ public class TikvStdSessions extends TikvSessions {
 
             pairs.add(Pair.of(new byte[0],
                               originKey(tablePrefixLength,
-                              endKey.toByteArray())));
+                                        endKey.toByteArray())));
 
             return pairs;
         }
