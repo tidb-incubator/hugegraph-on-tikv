@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,9 +32,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
-import com.google.common.collect.ImmutableList;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -301,50 +298,58 @@ public class TikvStdSessions extends TikvSessions {
                                 Key.toRawKey(startKey).nextPrefix().getBytes());
             List<TiRegion> regions = this.fetchRegionsFromRange(startKey,
                                                                 endKey);
+
+            List<Pair<byte[], byte[]>> pairs = new ArrayList<>();
             if (regions == null) {
-                return Collections.emptyList();
+                return pairs;
             }
 
             int tablePrefixLength = startKey.size();
+            for (TiRegion region : regions) {
+                /*
+                 * Tikv region look like this:
+                 * region1 [startKey1, regionEndKey1)
+                 * region2 [startKey2, regionEndKey2)
+                 *  ...
+                 * regionN [startKeyN, regionEndKeyN)
+                 * if regionEndKeyN < tableEndKey, the table real
+                 * end key is regionEndKeyN, otherwise the real
+                 * end key is table end key
+                 */
+                Key realStartKey = Key.toRawKey(startKey);
+                Key realEndKey = Key.toRawKey(endKey);
 
-            List<Pair<byte[], byte[]>> result = regions.stream()
-                      .filter((region) -> {
-                             return !region.getStartKey().isEmpty();
-                       }).map((region) -> {
-                           /*
-                            * Tikv region look like this:
-                            * region1 [startKey1, regionEndKey1)
-                            * region2 [startKey2, regionEndKey2)
-                            *  ...
-                            * regionN [startKeyN, regionEndKeyN)
-                            * if regionEndKeyN < tableEndKey, the table real
-                            * end key is regionEndKeyN, otherwise the real
-                            * end key is table end key
-                            */
-                             byte[] realEndKey = null;
-                             Key regionEndRowKey = Key.toRawKey(
-                                                       region.getEndKey());
-                             Key endRowKey = Key.toRawKey(endKey);
-                             if (endRowKey.compareTo(regionEndRowKey) > 0) {
-                                 realEndKey = regionEndRowKey.getBytes();
-                             } else {
-                                 realEndKey = endRowKey.getBytes();
-                             }
+                ByteString regionStartKey = region.getStartKey();
+                if (regionStartKey != null && !regionStartKey.isEmpty()) {
+                    Key regionStartRawKey = Key.toRawKey(regionStartKey);
+                    if (realStartKey.compareTo(regionStartRawKey) <= 0) {
+                        realStartKey = regionStartRawKey;
+                    }
+                }
 
-                             return Pair.of(originKey(tablePrefixLength,
-                                                      region.getStartKey()
-                                                            .toByteArray()),
-                                            originKey(tablePrefixLength,
-                                                      realEndKey));
-                       }).collect(Collectors.toList());
+                ByteString regionEndKey = region.getEndKey();
+                if (regionEndKey != null && !regionEndKey.isEmpty()) {
+                    Key regionEndRawKey = Key.toRawKey(regionEndKey);
+                    if (realEndKey.compareTo(regionEndRawKey) >= 0) {
+                        realEndKey = regionEndRawKey;
+                    }
+                }
 
-            if (CollectionUtils.isNotEmpty(result)) {
-                return result;
+                pairs.add(Pair.of(originKey(tablePrefixLength,
+                                            realStartKey.getBytes()),
+                                  originKey(tablePrefixLength,
+                                            realEndKey.getBytes())));
             }
 
-            return ImmutableList.of(Pair.of(new byte[0],
-                                            originKey(tablePrefixLength,
-                                                      endKey.toByteArray())));
+            if (CollectionUtils.isNotEmpty(pairs)) {
+                return pairs;
+            }
+
+            pairs.add(Pair.of(new byte[0],
+                              originKey(tablePrefixLength,
+                                        endKey.toByteArray())));
+
+            return pairs;
         }
 
         private List<TiRegion> fetchRegionsFromRange(ByteString startKey,
