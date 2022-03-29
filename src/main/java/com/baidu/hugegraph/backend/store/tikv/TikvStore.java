@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.baidu.hugegraph.backend.store.BackendTable;
 import org.slf4j.Logger;
 
 import com.baidu.hugegraph.backend.BackendException;
@@ -304,7 +305,8 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
                                  new TikvTables.IndexLabel(namespace));
 
             registerTableManager(HugeType.SECONDARY_INDEX,
-                                 new TikvTables.SecondaryIndex(namespace));
+                                 new TikvTables.SecondaryIndex(
+                                 BackendTable.joinTableName(namespace, store)));
         }
 
         @Override
@@ -346,34 +348,36 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
                               String namespace, String store) {
             super(provider, namespace, store);
 
+            String tablePrefix = BackendTable.joinTableName(namespace, store);
+
             registerTableManager(HugeType.VERTEX,
-                                 new TikvTables.Vertex(namespace));
+                                 new TikvTables.Vertex(tablePrefix));
 
             registerTableManager(HugeType.EDGE_OUT,
-                                 TikvTables.Edge.out(namespace));
+                                 TikvTables.Edge.out(tablePrefix));
             registerTableManager(HugeType.EDGE_IN,
-                                 TikvTables.Edge.in(namespace));
+                                 TikvTables.Edge.in(tablePrefix));
 
             registerTableManager(HugeType.SECONDARY_INDEX,
-                                 new TikvTables.SecondaryIndex(namespace));
+                                 new TikvTables.SecondaryIndex(tablePrefix));
             registerTableManager(HugeType.VERTEX_LABEL_INDEX,
-                                 new TikvTables.VertexLabelIndex(namespace));
+                                 new TikvTables.VertexLabelIndex(tablePrefix));
             registerTableManager(HugeType.EDGE_LABEL_INDEX,
-                                 new TikvTables.EdgeLabelIndex(namespace));
+                                 new TikvTables.EdgeLabelIndex(tablePrefix));
             registerTableManager(HugeType.RANGE_INT_INDEX,
-                                 new TikvTables.RangeIntIndex(namespace));
+                                 new TikvTables.RangeIntIndex(tablePrefix));
             registerTableManager(HugeType.RANGE_FLOAT_INDEX,
-                                 new TikvTables.RangeFloatIndex(namespace));
+                                 new TikvTables.RangeFloatIndex(tablePrefix));
             registerTableManager(HugeType.RANGE_LONG_INDEX,
-                                 new TikvTables.RangeLongIndex(namespace));
+                                 new TikvTables.RangeLongIndex(tablePrefix));
             registerTableManager(HugeType.RANGE_DOUBLE_INDEX,
-                                 new TikvTables.RangeDoubleIndex(namespace));
+                                 new TikvTables.RangeDoubleIndex(tablePrefix));
             registerTableManager(HugeType.SEARCH_INDEX,
-                                 new TikvTables.SearchIndex(namespace));
+                                 new TikvTables.SearchIndex(tablePrefix));
             registerTableManager(HugeType.SHARD_INDEX,
-                                 new TikvTables.ShardIndex(namespace));
+                                 new TikvTables.ShardIndex(tablePrefix));
             registerTableManager(HugeType.UNIQUE_INDEX,
-                                 new TikvTables.UniqueIndex(namespace));
+                                 new TikvTables.UniqueIndex(tablePrefix));
         }
 
         @Override
