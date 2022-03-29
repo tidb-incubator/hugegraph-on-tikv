@@ -264,6 +264,7 @@ public class TikvStdSessions extends TikvSessions {
                 for (ByteString key : this.deletePrefixBatch) {
                     tikv().deletePrefix(key);
                 }
+                this.deletePrefixBatch.clear();
             }
 
             if (this.deleteRangeBatch.size() > 0) {
@@ -271,6 +272,7 @@ public class TikvStdSessions extends TikvSessions {
                      this.deleteRangeBatch.entrySet()) {
                     tikv().deleteRange(entry.getKey(), entry.getValue());
                 }
+                this.deleteRangeBatch.clear();
             }
 
             return count;
