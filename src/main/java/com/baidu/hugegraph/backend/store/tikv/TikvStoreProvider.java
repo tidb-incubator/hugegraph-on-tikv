@@ -23,6 +23,7 @@ import com.baidu.hugegraph.backend.store.AbstractBackendStoreProvider;
 import com.baidu.hugegraph.backend.store.BackendStore;
 import com.baidu.hugegraph.backend.store.tikv.TikvStore.TikvGraphStore;
 import com.baidu.hugegraph.backend.store.tikv.TikvStore.TikvSchemaStore;
+import com.baidu.hugegraph.config.HugeConfig;
 
 public class TikvStoreProvider extends AbstractBackendStoreProvider {
 
@@ -33,12 +34,12 @@ public class TikvStoreProvider extends AbstractBackendStoreProvider {
     }
 
     @Override
-    protected BackendStore newSchemaStore(String store) {
+    protected BackendStore newSchemaStore(HugeConfig config, String store) {
         return new TikvSchemaStore(this, this.namespace(), store);
     }
 
     @Override
-    protected BackendStore newGraphStore(String store) {
+    protected BackendStore newGraphStore(HugeConfig config, String store) {
         return new TikvGraphStore(this, this.namespace(), store);
     }
 

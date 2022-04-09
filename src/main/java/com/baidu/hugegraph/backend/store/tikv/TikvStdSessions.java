@@ -590,7 +590,8 @@ public class TikvStdSessions extends TikvSessions {
         @Override
         public boolean hasNext() {
             // Update position for paging
-            if (!this.iter.hasNext()) {
+            matched = this.iter.hasNext();
+            if (!matched) {
                 this.position = null;
                 this.close();
                 return false;

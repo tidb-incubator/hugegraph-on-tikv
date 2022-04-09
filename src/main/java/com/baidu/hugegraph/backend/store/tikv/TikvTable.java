@@ -259,7 +259,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             start = position;
         }
         if (start == null) {
-            start = ShardSpliter.START_BYTES;
+            start = ShardSplitter.START_BYTES;
         }
         int type = Session.SCAN_GTE_BEGIN;
         if (end != null) {
@@ -281,7 +281,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         });
     }
 
-    private static class TikvShardSpliter extends ShardSpliter<Session> {
+    private static class TikvShardSpliter extends ShardSplitter<Session> {
 
         public TikvShardSpliter(String table) {
             super(table);
