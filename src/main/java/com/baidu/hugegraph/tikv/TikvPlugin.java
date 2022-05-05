@@ -32,7 +32,7 @@ public class TikvPlugin implements HugeGraphPlugin {
 
     @Override
     public String supportsMinVersion() {
-        return "0.12.0";
+        return "0.13.0";
     }
 
     @Override
