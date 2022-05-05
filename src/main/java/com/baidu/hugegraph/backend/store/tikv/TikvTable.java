@@ -44,7 +44,7 @@ import com.baidu.hugegraph.backend.serializer.BinaryEntryIterator;
 import com.baidu.hugegraph.backend.store.BackendEntry;
 import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumn;
 import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
-import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIteratorWrapper;
+import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator.BackendColumnIteratorWrapper;
 import com.baidu.hugegraph.backend.store.BackendEntryIterator;
 import com.baidu.hugegraph.backend.store.BackendTable;
 import com.baidu.hugegraph.backend.store.Shard;
@@ -210,7 +210,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             return BackendColumnIterator.empty();
         }
         BackendColumn col = BackendColumn.of(id.asBytes(), value);
-        return new BackendEntry.BackendColumnIteratorWrapper(col);
+        return BackendColumnIterator.iterator(col);
     }
 
     protected BackendColumnIterator queryByPrefix(Session session,

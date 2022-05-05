@@ -37,7 +37,7 @@ public class TikvPlugin implements HugeGraphPlugin {
 
     @Override
     public String supportsMaxVersion() {
-        return "0.13";
+        return "0.14";
     }
 
     public static void main(String[] args) {
