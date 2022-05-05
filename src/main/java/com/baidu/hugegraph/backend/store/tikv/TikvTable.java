@@ -44,7 +44,7 @@ import com.baidu.hugegraph.backend.serializer.BinaryEntryIterator;
 import com.baidu.hugegraph.backend.store.BackendEntry;
 import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumn;
 import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
-import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIteratorWrapper;
+import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator.BackendColumnIteratorWrapper;
 import com.baidu.hugegraph.backend.store.BackendEntryIterator;
 import com.baidu.hugegraph.backend.store.BackendTable;
 import com.baidu.hugegraph.backend.store.Shard;
@@ -210,7 +210,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             return BackendColumnIterator.empty();
         }
         BackendColumn col = BackendColumn.of(id.asBytes(), value);
-        return new BackendEntry.BackendColumnIteratorWrapper(col);
+        return BackendColumnIterator.iterator(col);
     }
 
     protected BackendColumnIterator queryByPrefix(Session session,
@@ -259,7 +259,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
             start = position;
         }
         if (start == null) {
-            start = ShardSpliter.START_BYTES;
+            start = ShardSplitter.START_BYTES;
         }
         int type = Session.SCAN_GTE_BEGIN;
         if (end != null) {
@@ -281,7 +281,7 @@ public class TikvTable extends BackendTable<Session, BackendEntry> {
         });
     }
 
-    private static class TikvShardSpliter extends ShardSpliter<Session> {
+    private static class TikvShardSpliter extends ShardSplitter<Session> {
 
         public TikvShardSpliter(String table) {
             super(table);
